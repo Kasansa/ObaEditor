@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { SketchPicker } from 'react-color';
 
-const FontMenu = ({ onFontChange }) => {
+const FontMenu = ({ handleFontChange }) => {
   const [text, setText] = useState('');
   const [fontSize, setFontSize] = useState(16);
   const [fontOutline, setFontOutline] = useState(0);
@@ -33,7 +33,7 @@ const FontMenu = ({ onFontChange }) => {
 
   const handleAddText = () => {
     if (text.trim()) {
-      onFontChange({
+      handleFontChange({
         text,
         fontSize,
         fontFamily,

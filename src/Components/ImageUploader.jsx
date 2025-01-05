@@ -14,7 +14,7 @@ function ImageUploader({ onUpload }) {
   
     return (
       <div className="my-4">
-        <label className="cursor-pointer bg-blue-500 text-white py-2 px-4 rounded">
+        <label className="btn cursor-pointer  bg-blue-500 text-white py-2 px-4 rounded">
           Upload Image
           <input type="file" className="hidden" onChange={handleUpload} />
         </label>

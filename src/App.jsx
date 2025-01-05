@@ -8,11 +8,11 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { library } from '@fortawesome/fontawesome-svg-core';
 import { faTrash, faCopy, faRotate, faLayerGroup, faEraser, faExpand } from '@fortawesome/free-solid-svg-icons';
 import html2canvas from "html2canvas";
-
+import Dragger from "./Components/Dragger";
 // Initialize FontAwesome icons
 library.add(faTrash, faCopy, faRotate, faLayerGroup, faExpand, faEraser);
 
-const ResizableElement = ({ children, width, height, onResize, onResizeStart, onResizeEnd }) => {
+const ResizableElement = ({ children, width, height, onResize, onResizeStart, onResizeEnd, handle }) => {
   const handleResizeStop = (e, data) => {
     e.stopPropagation();
     onResizeEnd();
@@ -31,13 +31,8 @@ const ResizableElement = ({ children, width, height, onResize, onResizeStart, on
         }}
         onResizeStop={handleResizeStop}
         minConstraints={[50, 50]}
-        maxConstraints={[500, 500]}
-        handle={
-          <FontAwesomeIcon 
-            className="text-2xl cursor-pointer absolute -bottom-6 -right-6 text-blue-600 hover:text-blue-700" 
-            icon="fa-solid fa-expand" 
-          />
-        }
+        maxConstraints={[600, 600]}
+        handle={handle}
       >
         {children}
       </ResizableBox>
@@ -67,7 +62,7 @@ function App() {
   const [selectedElement, setSelectedElement] = useState(null);
   const [isResizing, setIsResizing] = useState(false);
   const [isRotating, setIsRotating] = useState(false);
-  
+  const [imagehover, setImageHover] = useState(false);
   // Refs
   const rotationStartRef = useRef({ x: 0, y: 0, rotation: 0 });
   const canvasRef = useRef(null);
@@ -115,26 +110,28 @@ function App() {
   };
 
   // Text handling functions
-  const addTextElement = (fontFamily) => {
+  const addTextElement = (fontinfo) => {
     const newText = {
       id: Date.now(),
       type: 'text',
-      content: 'Double click to edit',
+      content: fontinfo.text,
       x: 100,
       y: 100,
       width: 200,
       height: 50,
       rotation: 0,
-      fontFamily,
-      fontSize: 24,
-      color: '#000000',
+      fontOutline: fontinfo.fontOutline,
+      outlineColor: fontinfo.outlineColor,
+      fontFamily: fontinfo.fontFamily,
+      fontSize: fontinfo.fontSize,
+      color: fontinfo.color,
       z: uploadedImages.length + textElements.length + 1
     };
     setTextElements(prev => [...prev, newText]);
   };
 
-  const handleFontChange = (fontFamily) => {
-    addTextElement(fontFamily);
+  const handleFontChange = (fontinfo) => {
+    addTextElement(fontinfo);
   };
 
   const handleTextDoubleClick = (id, event) => {
@@ -348,7 +345,7 @@ function App() {
     <div className="relative w-screen h-screen bg-base-200">
       {/* Canvas Area */}
       <div className="absolute inset-0 flex items-center justify-center" ref={canvasRef}>
-        <div className="relative w-3/4 h-3/4 bg-slate-300 border border-gray-300 rounded-lg shadow-lg overflow-hidden">
+        <div className="relative w-3/4 h-3/4 bg-slate-300 border border-gray-300 rounded-lg shadow-lg overflow-hidden"  >
           {/* Images */}
           {uploadedImages.map((img) => (
             <DraggableWrapper
@@ -357,6 +354,7 @@ function App() {
               onDragStop={(e, data) => updateElementPosition(img.id, data.x, data.y, 'image')}
               isRotating={isRotating}
               isResizing={isResizing}
+                
             >
               <div 
                 className="absolute"
@@ -371,6 +369,10 @@ function App() {
                   onResize={(size) => updateImageSize(img.id, size.width, size.height)}
                   onResizeStart={() => setIsResizing(true)}
                   onResizeEnd={() => setIsResizing(false)}
+                  handle={selectedElement?.id === img.id && selectedElement?.type === 'image' ? <FontAwesomeIcon 
+                  className="text-2xl cursor-pointer absolute -bottom-6 -right-6 text-blue-600 hover:text-blue-700" 
+                  icon="fa-solid fa-expand" 
+                /> : <div></div>}
                 >
                   <img
                     src={img.src}
@@ -380,6 +382,7 @@ function App() {
                     style={{
                       transform: `rotate(${img.rotation || 0}deg) scaleX(${img.flipped ? -1 : 1})`,
                     }}
+                    draggable={false}
                   />
                 </ResizableElement>
 
@@ -441,6 +444,7 @@ function App() {
               onDragStop={(e, data) => updateElementPosition(text.id, data.x, data.y, 'text')}
               isRotating={isRotating}
               isResizing={isResizing}
+
             >
               <div 
                 className="absolute"
@@ -455,6 +459,10 @@ function App() {
                   onResize={(size) => updateTextSize(text.id, size.width, size.height)}
                   onResizeStart={() => setIsResizing(true)}
                   onResizeEnd={() => setIsResizing(false)}
+                  handle={selectedElement?.id === text.id && selectedElement?.type === 'text' ? <FontAwesomeIcon 
+                  className="text-2xl cursor-pointer absolute -bottom-6 -right-6 text-blue-600 hover:text-blue-700" 
+                  icon="fa-solid fa-expand" 
+                /> : <div></div>}
                 >
                   <div
                     className="w-full h-full cursor-move select-none flex items-center justify-center"
@@ -462,6 +470,8 @@ function App() {
                       fontFamily: text.fontFamily,
                       fontSize: `${text.fontSize}px`,
                       color: text.color,
+                      WebkitTextStrokeWidth: `${text.fontOutline}px`,
+                      WebkitTextStrokeColor: text.outlineColor,
                       transform: `rotate(${text.rotation || 0}deg)`,
                     }}
                     onClick={() => setSelectedElement({ id: text.id, type: 'text' })}
@@ -522,7 +532,7 @@ function App() {
       </div>
       
       <div className="absolute top-4 right-4">
-        <FontMenu onFontChange={handleFontChange} />
+        <FontMenu handleFontChange={handleFontChange} />
       </div>
       
       <button
@@ -531,6 +541,10 @@ function App() {
       >
         Download Screenshot
       </button>
+
+      <div className="absolute bottom-4 left-4">
+        <Dragger />
+      </div>
     </div>
   );
 }
