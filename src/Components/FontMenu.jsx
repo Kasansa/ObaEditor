@@ -47,10 +47,10 @@ const FontMenu = ({ handleFontChange }) => {
   };
 
   return (
-    <div className="bg-base-100 p-4 rounded-lg shadow-sm shadow-slate-400 w-80">
+    <div className="bg-base-100 p-4 rounded-lg shadow-sm shadow-slate-400 lg:w-80 sm:w-40">
       <button
         onClick={() => setShowTextMenu(!showTextMenu)}
-        className="btn w-full text-white py-2 px-4 rounded mb-4"
+        className="btn lg:w-full text-white py-2 px-4 rounded mb-4 sm:w-10"
       >
         {showTextMenu ? 'Hide Text Menu' : 'Show Text Menu'}
       </button>

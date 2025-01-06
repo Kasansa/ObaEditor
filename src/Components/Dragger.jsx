@@ -1,10 +1,9 @@
 import React from 'react'
 import { useState } from 'react'
-function Dragger() {
-    const [dragged, setDragged] = useState(false)
+function Dragger({setCanvasDragging, canvasDragging}) {
 
   return (
-    <button className={`btn text-white ${dragged?'bg-red-500 animate-pulse':'bg-blue-500'}`} onClick={() => setDragged(!dragged)}>{dragged?'Dragging Canvas':'Drag Canvas'}</button>
+    <button className={`btn text-white ${canvasDragging?'bg-red-500 animate-pulse':'bg-blue-500'}`} onClick={() => setCanvasDragging(!canvasDragging)}>{canvasDragging?'Dragging Canvas':'Drag Canvas'}</button>
   )
 }
 

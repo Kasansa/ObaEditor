@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
+import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 import ImageUploader from "./Components/ImageUploader";
 import FontMenu from "./Components/FontMenu";
 import { ResizableBox } from "react-resizable";
@@ -7,7 +8,7 @@ import "react-resizable/css/styles.css";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { library } from '@fortawesome/fontawesome-svg-core';
 import { faTrash, faCopy, faRotate, faLayerGroup, faEraser, faExpand } from '@fortawesome/free-solid-svg-icons';
-import html2canvas from "html2canvas";
+import { toPng, toJpeg } from "html-to-image";
 import Dragger from "./Components/Dragger";
 // Initialize FontAwesome icons
 library.add(faTrash, faCopy, faRotate, faLayerGroup, faExpand, faEraser);
@@ -24,14 +25,14 @@ const ResizableElement = ({ children, width, height, onResize, onResizeStart, on
       <ResizableBox
         width={width}
         height={height}
-        lockAspectRatio={false}
+        lockAspectRatio={true}
         onResizeStart={(e) => {
           e.stopPropagation();
           onResizeStart();
         }}
         onResizeStop={handleResizeStop}
         minConstraints={[50, 50]}
-        maxConstraints={[600, 600]}
+        
         handle={handle}
       >
         {children}
@@ -55,19 +56,83 @@ const DraggableWrapper = ({ children, position, onDragStop, isRotating, isResizi
   );
 };
 
-function App() {
-  // State management
-  const [uploadedImages, setUploadedImages] = useState([]);
-  const [textElements, setTextElements] = useState([]);
-  const [selectedElement, setSelectedElement] = useState(null);
-  const [isResizing, setIsResizing] = useState(false);
-  const [isRotating, setIsRotating] = useState(false);
-  const [imagehover, setImageHover] = useState(false);
-  // Refs
-  const rotationStartRef = useRef({ x: 0, y: 0, rotation: 0 });
-  const canvasRef = useRef(null);
-  const isRotatingRef = useRef(false);
 
+function App() {
+// Existing state variables
+const [uploadedImages, setUploadedImages] = useState([]);
+const [textElements, setTextElements] = useState([]);
+const [selectedElement, setSelectedElement] = useState(null);
+const [isResizing, setIsResizing] = useState(false);
+const [isRotating, setIsRotating] = useState(false);
+const [canvasDragging, setCanvasDragging] = useState(false);
+
+// Modified canvas position state with initial values
+const [canvasPosition, setCanvasPosition] = useState({ x: 0, y: 0 });
+const [isDraggingCanvas, setIsDraggingCanvas] = useState(false);
+const lastMousePosition = useRef({ x: 0, y: 0 });
+const canvasRef = useRef(null);
+// Handle canvas drag start
+const handleCanvasDragStart = (e) => {
+  if (!canvasDragging || isResizing || isRotating) return;
+  
+  setIsDraggingCanvas(true);
+  lastMousePosition.current = {
+    x: e.clientX,
+    y: e.clientY
+  };
+};
+
+// Handle canvas dragging
+
+const handleCanvasDrag = (e) => {
+  if (!isDraggingCanvas || !canvasDragging) return;
+
+  const deltaX = e.clientX - lastMousePosition.current.x;
+  const deltaY = e.clientY - lastMousePosition.current.y;
+
+  setCanvasPosition(prev => ({
+    x: prev.x + deltaX,
+    y: prev.y + deltaY
+  }));
+
+  lastMousePosition.current = {
+    x: e.clientX,
+    y: e.clientY
+  };
+};
+
+// Handle canvas drag end
+const handleCanvasDragEnd = () => {
+  setIsDraggingCanvas(false);
+};
+
+// Add event listeners for canvas dragging
+useEffect(() => {
+  if (canvasDragging) {
+    window.addEventListener('mousedown', handleCanvasDragStart);
+    window.addEventListener('mousemove', handleCanvasDrag);
+    window.addEventListener('mouseup', handleCanvasDragEnd);
+  }
+
+  return () => {
+    window.removeEventListener('mousedown', handleCanvasDragStart);
+    window.removeEventListener('mousemove', handleCanvasDrag);
+    window.removeEventListener('mouseup', handleCanvasDragEnd);
+  };
+}, [canvasDragging, isDraggingCanvas]);
+
+// Update element positions relative to canvas position
+const updateElementPosition = (id, x, y, type) => {
+  if (type === 'image') {
+    setUploadedImages(prev =>
+      prev.map(img => img.id === id ? { ...img, x, y } : img)
+    );
+  } else {
+    setTextElements(prev =>
+      prev.map(text => text.id === id ? { ...text, x, y } : text)
+    );
+  }
+};
   // Image handling functions
   const addImage = (src) => {
     const loadImage = (dataUrl) => {
@@ -108,7 +173,10 @@ function App() {
         console.error('Error loading image:', error);
       });
   };
-
+  //canvas handling functions
+  const setCanvasVar = () => {
+    setCanvasDragging(!canvasDragging);
+  }
   // Text handling functions
   const addTextElement = (fontinfo) => {
     const newText = {
@@ -192,18 +260,7 @@ function App() {
     document.addEventListener('mouseup', handleRotationEnd);
   };
 
-  const updateElementPosition = (id, x, y, type) => {
-    if (type === 'image') {
-      setUploadedImages(prev =>
-        prev.map(img => img.id === id ? { ...img, x, y } : img)
-      );
-    } else {
-      setTextElements(prev =>
-        prev.map(text => text.id === id ? { ...text, x, y } : text)
-      );
-    }
-  };
-
+ 
   const deleteElement = (id, type) => {
     if (type === 'image') {
       setUploadedImages(prev => prev.filter(img => img.id !== id));
@@ -327,203 +384,235 @@ function App() {
     );
   };
 
-  const captureScreenshot = async () => {
+  const captureScreenshot = async (format="jpeg") => {
     if (canvasRef.current) {
       try {
-        const canvas = await html2canvas(canvasRef.current);
-        const link = document.createElement("a");
-        link.download = "screenshot.png";
-        link.href = canvas.toDataURL();
-        link.click();
-      } catch (error) {
-        console.error('Error capturing screenshot:', error);
-      }
+        const dataUrl =
+        format === "jpeg"
+          ? await toJpeg(canvasRef.current, { quality: 0.95 })
+          : await toPng(canvasRef.current);
+
+      // Create a link element to download the image
+      const link = document.createElement("a");
+      link.download = `screenshot.jpeg`;
+      link.href = dataUrl;
+      link.click();
+    } 
+    catch (error) {
+      console.error("Error capturing screenshot:", error);
     }
-  };
+  }};
 
   return (
     <div className="relative w-screen h-screen bg-base-200">
-      {/* Canvas Area */}
-      <div className="absolute inset-0 flex items-center justify-center" ref={canvasRef}>
-        <div className="relative w-3/4 h-3/4 bg-slate-300 border border-gray-300 rounded-lg shadow-lg overflow-hidden"  >
-          {/* Images */}
-          {uploadedImages.map((img) => (
-            <DraggableWrapper
-              key={img.id}
-              position={{ x: img.x, y: img.y }}
-              onDragStop={(e, data) => updateElementPosition(img.id, data.x, data.y, 'image')}
-              isRotating={isRotating}
-              isResizing={isResizing}
+    {/* Canvas Area */}
+    <div className="absolute inset-0 flex items-center justify-center overflow-hidden">
+      <div 
+        className={`relative w-screen h-5/6 bg-slate-300 border border-gray-300 rounded-lg shadow-lg ${
+          canvasDragging ? 'cursor-move' : ''
+        }`}
+        ref={canvasRef}
+        style={{
+          transform: `translate(${canvasPosition.x}px, ${canvasPosition.y}px)`,
+        }}
+      >
+        <div className="absolute inset-0">
+          {/* Render a large grid pattern for visual feedback */}
+          <div 
+            className="absolute inset-0" 
+            style={{
+              backgroundImage: 'linear-gradient(#f0f1f0 1px, transparent 1px), linear-gradient(90deg, #ccc 1px, transparent 1px)',
+              backgroundSize: '50px 50px',
+              width: '200%',
+              height: '200%',
+              left: '-50%',
+              top: '-50%'
+            }}
+          />
+          
+            {/* Images */}
+            {uploadedImages.map((img) => (
+              <DraggableWrapper
+                key={img.id}
+                position={{ x: img.x, y: img.y }}
+                onDragStop={(e, data) => updateElementPosition(img.id, data.x, data.y, 'image')}
+                isRotating={isRotating}
+                isResizing={isResizing}
                 
-            >
-              <div 
-                className="absolute"
-                style={{ 
-                  zIndex: img.z,
-                  pointerEvents: isRotating ? 'none' : 'auto'
-                }}
               >
-                <ResizableElement
-                  width={img.width}
-                  height={img.height}
-                  onResize={(size) => updateImageSize(img.id, size.width, size.height)}
-                  onResizeStart={() => setIsResizing(true)}
-                  onResizeEnd={() => setIsResizing(false)}
-                  handle={selectedElement?.id === img.id && selectedElement?.type === 'image' ? <FontAwesomeIcon 
-                  className="text-2xl cursor-pointer absolute -bottom-6 -right-6 text-blue-600 hover:text-blue-700" 
-                  icon="fa-solid fa-expand" 
-                /> : <div></div>}
+                <div 
+                  className="absolute"
+                  style={{ 
+                    zIndex: img.z,
+                    pointerEvents: isRotating ? 'none' : 'auto'
+                  }}
                 >
-                  <img
-                    src={img.src}
-                    alt="Uploaded"
-                    className="w-full h-full cursor-move select-none"
-                    onClick={() => setSelectedElement({ id: img.id, type: 'image' })}
-                    style={{
-                      transform: `rotate(${img.rotation || 0}deg) scaleX(${img.flipped ? -1 : 1})`,
-                    }}
-                    draggable={false}
-                  />
-                </ResizableElement>
-
-                {selectedElement?.id === img.id && selectedElement?.type === 'image' && (
-                  <div className="absolute -top-12 left-0 bg-gray-800 rounded-lg flex items-center space-x-3 px-3 py-2 shadow-lg">
-                    <button
-                      className="text-red-500 hover:text-red-400 transition-colors"
-                      onClick={() => deleteElement(img.id, 'image')}
-                      title="Delete"
-                    >
-                      <FontAwesomeIcon icon="trash" className="h-4 w-4" />
-                    </button>
-                    <button 
-                      className="text-blue-500 hover:text-blue-400 transition-colors"
-                      onClick={() => copyElement(img.id, 'image')}
-                      title="Copy"
-                    >
-                      <FontAwesomeIcon icon="copy" className="h-4 w-4" />
-                    </button>
-                    <button 
-                      className="text-green-500 hover:text-green-400 transition-colors"
-                      onMouseDown={(e) => handleRotationStart(img.id, 'image', e)}
-                      title="Rotate"
-                    >
-                      <FontAwesomeIcon icon="rotate" className="h-4 w-4" />
-                    </button>
-                    <button 
-                      className="text-yellow-500 hover:text-yellow-400 transition-colors"
-                      onClick={() => moveBack(img.id, 'image')}
-                      title="Move Back"
-                    >
-                      <FontAwesomeIcon icon="layer-group" className="h-4 w-4" />
-                    </button>
-                    <button 
-                      className="text-pink-500 hover:text-pink-400 transition-colors"
-                      onClick={() => moveFront(img.id, 'image')}
-                      title="Move Front"
-                    >
-                      <FontAwesomeIcon icon="layer-group" className="h-4 w-4 transform scale-y-[-1]" />
-                    </button>
-                    <button 
-                      className="text-purple-500 hover:text-purple-400 transition-colors"
-                      onClick={() => flipImage(img.id)}
-                      title="Mirror"
-                    >
-                      <FontAwesomeIcon icon="rotate" className="h-4 w-4 transform scale-x-[-1]" />
-                    </button>
-                  </div>
-                )}
-              </div>
-            </DraggableWrapper>
-          ))}
-
-          {/* Text Elements */}
-          {textElements.map((text) => (
-            <DraggableWrapper
-              key={text.id}
-              position={{ x: text.x, y: text.y }}
-              onDragStop={(e, data) => updateElementPosition(text.id, data.x, data.y, 'text')}
-              isRotating={isRotating}
-              isResizing={isResizing}
-
-            >
-              <div 
-                className="absolute"
-                style={{ 
-                  zIndex: text.z,
-                  pointerEvents: isRotating ? 'none' : 'auto'
-                }}
-              >
-                <ResizableElement
-                  width={text.width}
-                  height={text.height}
-                  onResize={(size) => updateTextSize(text.id, size.width, size.height)}
-                  onResizeStart={() => setIsResizing(true)}
-                  onResizeEnd={() => setIsResizing(false)}
-                  handle={selectedElement?.id === text.id && selectedElement?.type === 'text' ? <FontAwesomeIcon 
-                  className="text-2xl cursor-pointer absolute -bottom-6 -right-6 text-blue-600 hover:text-blue-700" 
-                  icon="fa-solid fa-expand" 
-                /> : <div></div>}
-                >
-                  <div
-                    className="w-full h-full cursor-move select-none flex items-center justify-center"
-                    style={{
-                      fontFamily: text.fontFamily,
-                      fontSize: `${text.fontSize}px`,
-                      color: text.color,
-                      WebkitTextStrokeWidth: `${text.fontOutline}px`,
-                      WebkitTextStrokeColor: text.outlineColor,
-                      transform: `rotate(${text.rotation || 0}deg)`,
-                    }}
-                    onClick={() => setSelectedElement({ id: text.id, type: 'text' })}
-                    onDoubleClick={(e) => handleTextDoubleClick(text.id, e)}
+                  <ResizableElement
+                    width={img.width}
+                    height={img.height}
+                    onResize={(size) => updateImageSize(img.id, size.width, size.height)}
+                    onResizeStart={() => setIsResizing(true)}
+                    onResizeEnd={() => setIsResizing(false)}
+                    handle={selectedElement?.id === img.id && selectedElement?.type === 'image' ? <FontAwesomeIcon 
+                    className="text-2xl cursor-pointer absolute -bottom-6 -right-6 text-blue-600 hover:text-blue-700" 
+                    icon="fa-solid fa-expand" 
+                  /> : <div></div>}
                   >
-                    {text.content}
-                  </div>
-                </ResizableElement>
+                    <img
+                      src={img.src}
+                      alt="Uploaded"
+                      className="w-full h-full cursor-move select-none"
+                      onClick={() => setSelectedElement({ id: img.id, type: 'image' })}
+                      style={{
+                        transform: `rotate(${img.rotation || 0}deg) scaleX(${img.flipped ? -1 : 1})`,
+                      }}
+                      draggable={false}
+                    />
+                  </ResizableElement>
 
-                {selectedElement?.id === text.id && selectedElement?.type === 'text' && (
-                  <div className="absolute -top-12 left-0 bg-gray-800 rounded-lg flex items-center space-x-3 px-3 py-2 shadow-lg">
-                    <button
-                      className="text-red-500 hover:text-red-400 transition-colors"
-                      onClick={() => deleteElement(text.id, 'text')}
-                      title="Delete"
+                  {selectedElement?.id === img.id && selectedElement?.type === 'image' && (
+                    <div className="absolute -top-12 left-0 bg-gray-800 rounded-lg flex items-center space-x-3 px-3 py-2 shadow-lg">
+                      <button
+                        className="text-red-500 hover:text-red-400 transition-colors"
+                        onClick={() => deleteElement(img.id, 'image')}
+                        title="Delete"
+                      >
+                        <FontAwesomeIcon icon="trash" className="h-4 w-4" />
+                      </button>
+                      <button 
+                        className="text-blue-500 hover:text-blue-400 transition-colors"
+                        onClick={() => copyElement(img.id, 'image')}
+                        title="Copy"
+                      >
+                        <FontAwesomeIcon icon="copy" className="h-4 w-4" />
+                      </button>
+                      <button 
+                        className="text-green-500 hover:text-green-400 transition-colors"
+                        onMouseDown={(e) => handleRotationStart(img.id, 'image', e)}
+                        title="Rotate"
+                      >
+                        <FontAwesomeIcon icon="rotate" className="h-4 w-4" />
+                      </button>
+                      <button 
+                        className="text-yellow-500 hover:text-yellow-400 transition-colors"
+                        onClick={() => moveBack(img.id, 'image')}
+                        title="Move Back"
+                      >
+                        <FontAwesomeIcon icon="layer-group" className="h-4 w-4" />
+                      </button>
+                      <button 
+                        className="text-pink-500 hover:text-pink-400 transition-colors"
+                        onClick={() => moveFront(img.id, 'image')}
+                        title="Move Front"
+                      >
+                        <FontAwesomeIcon icon="layer-group" className="h-4 w-4 transform scale-y-[-1]" />
+                      </button>
+                      <button 
+                        className="text-purple-500 hover:text-purple-400 transition-colors"
+                        onClick={() => flipImage(img.id)}
+                        title="Mirror"
+                      >
+                        <FontAwesomeIcon icon="rotate" className="h-4 w-4 transform scale-x-[-1]" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </DraggableWrapper>
+            ))}
+            
+
+            {/* Text Elements */}
+            {textElements.map((text) => (
+              <DraggableWrapper
+                key={text.id}
+                position={{ x: text.x, y: text.y }}
+                onDragStop={(e, data) => updateElementPosition(text.id, data.x, data.y, 'text')}
+                isRotating={isRotating}
+                isResizing={isResizing}
+
+              >
+                <div 
+                  className="absolute"
+                  style={{ 
+                    zIndex: text.z,
+                    pointerEvents: isRotating ? 'none' : 'auto'
+                  }}
+                >
+                  <ResizableElement
+                    width={text.width}
+                    height={text.height}
+                    onResize={(size) => updateTextSize(text.id, size.width, size.height)}
+                    onResizeStart={() => setIsResizing(true)}
+                    onResizeEnd={() => setIsResizing(false)}
+                    handle={selectedElement?.id === text.id && selectedElement?.type === 'text' ? <FontAwesomeIcon 
+                    className="text-2xl cursor-pointer absolute -bottom-6 -right-6 text-blue-600 hover:text-blue-700" 
+                    icon="fa-solid fa-expand" 
+                  /> : <div></div>}
+                  >
+                    <div
+                      className="w-full h-full cursor-move select-none flex items-center justify-center"
+                      style={{
+                        fontFamily: text.fontFamily,
+                        fontSize: `${text.fontSize}px`,
+                        color: text.color,
+                        WebkitTextStrokeWidth: `${text.fontOutline}px`,
+                        WebkitTextStrokeColor: text.outlineColor,
+                        transform: `rotate(${text.rotation || 0}deg)`,
+                      }}
+                      onClick={() => setSelectedElement({ id: text.id, type: 'text' })}
+                      onDoubleClick={(e) => handleTextDoubleClick(text.id, e)}
                     >
-                      <FontAwesomeIcon icon="trash" className="h-4 w-4" />
-                    </button>
-                    <button 
-                      className="text-blue-500 hover:text-blue-400 transition-colors"
-                      onClick={() => copyElement(text.id, 'text')}
-                      title="Copy"
-                    >
-                      <FontAwesomeIcon icon="copy" className="h-4 w-4" />
-                    </button>
-                    <button 
-                      className="text-green-500 hover:text-green-400 transition-colors"
-                      onMouseDown={(e) => handleRotationStart(text.id, 'text', e)}
-                      title="Rotate"
-                    >
-                      <FontAwesomeIcon icon="rotate" className="h-4 w-4" />
-                    </button>
-                    <button 
-                      className="text-yellow-500 hover:text-yellow-400 transition-colors"
-                      onClick={() => moveBack(text.id, 'text')}
-                      title="Move Back"
-                    >
-                      <FontAwesomeIcon icon="layer-group" className="h-4 w-4" />
-                    </button>
-                    <button 
-                      className="text-pink-500 hover:text-pink-400 transition-colors"
-                      onClick={() => moveFront(text.id, 'text')}
-                      title="Move Front"
-                    >
-                      <FontAwesomeIcon icon="layer-group" className="h-4 w-4 transform scale-y-[-1]" />
-                    </button>
-                  </div>
-                )}
-              </div>
-            </DraggableWrapper>
-          ))}
+                      {text.content}
+                    </div>
+                  </ResizableElement>
+
+                  {selectedElement?.id === text.id && selectedElement?.type === 'text' && (
+                    <div className="absolute -top-12 left-0 bg-gray-800 rounded-lg flex items-center space-x-3 px-3 py-2 shadow-lg">
+                      <button
+                        className="text-red-500 hover:text-red-400 transition-colors"
+                        onClick={() => deleteElement(text.id, 'text')}
+                        title="Delete"
+                      >
+                        <FontAwesomeIcon icon="trash" className="h-4 w-4" />
+                      </button>
+                      <button 
+                        className="text-blue-500 hover:text-blue-400 transition-colors"
+                        onClick={() => copyElement(text.id, 'text')}
+                        title="Copy"
+                      >
+                        <FontAwesomeIcon icon="copy" className="h-4 w-4" />
+                      </button>
+                      <button 
+                        className="text-green-500 hover:text-green-400 transition-colors"
+                        onMouseDown={(e) => handleRotationStart(text.id, 'text', e)}
+                        title="Rotate"
+                      >
+                        <FontAwesomeIcon icon="rotate" className="h-4 w-4" />
+                      </button>
+                      <button 
+                        className="text-yellow-500 hover:text-yellow-400 transition-colors"
+                        onClick={() => moveBack(text.id, 'text')}
+                        title="Move Back"
+                      >
+                        <FontAwesomeIcon icon="layer-group" className="h-4 w-4" />
+                      </button>
+                      <button 
+                        className="text-pink-500 hover:text-pink-400 transition-colors"
+                        onClick={() => moveFront(text.id, 'text')}
+                        title="Move Front"
+                      >
+                        <FontAwesomeIcon icon="layer-group" className="h-4 w-4 transform scale-y-[-1]" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </DraggableWrapper>
+            ))}
+            </div>
+
         </div>
+        
+        
       </div>
 
       {/* Controls */}
@@ -534,7 +623,12 @@ function App() {
       <div className="absolute top-4 right-4">
         <FontMenu handleFontChange={handleFontChange} />
       </div>
-      
+      <button
+        onClick={() => {
+          setSelectedElement(null);
+        }}
+        className="absolute bottom-4 right-60 bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg shadow transition-colors"
+      >Hide UI</button>
       <button
         onClick={captureScreenshot}
         className="absolute bottom-4 right-4 bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg shadow transition-colors"
@@ -543,10 +637,12 @@ function App() {
       </button>
 
       <div className="absolute bottom-4 left-4">
-        <Dragger />
+        <Dragger setCanvasDragging={setCanvasDragging} canvasDragging={canvasDragging} />
       </div>
     </div>
   );
+
 }
 
-export default App;
+
+export default App
