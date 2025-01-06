@@ -1,6 +1,6 @@
 
 # ObaEditor App
-
+![image of oba editor in use](image.png)
 The **ObaEditor App** is a React-based interactive tool that allows users to upload images, customize text, and manipulate elements on a canvas. This app includes functionality for dragging, resizing, rotating elements, and dynamically styling text using an intuitive UI.
 
 ## Features
