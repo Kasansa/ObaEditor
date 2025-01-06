@@ -10,6 +10,7 @@ import { library } from '@fortawesome/fontawesome-svg-core';
 import { faTrash, faCopy, faRotate, faLayerGroup, faEraser, faExpand } from '@fortawesome/free-solid-svg-icons';
 import { toPng, toJpeg } from "html-to-image";
 import Dragger from "./Components/Dragger";
+import MinitextMenu from "./Components/MinitextMenu";
 // Initialize FontAwesome icons
 library.add(faTrash, faCopy, faRotate, faLayerGroup, faExpand, faEraser);
 
@@ -70,6 +71,9 @@ const [canvasDragging, setCanvasDragging] = useState(false);
 const [canvasPosition, setCanvasPosition] = useState({ x: 0, y: 0 });
 const [isDraggingCanvas, setIsDraggingCanvas] = useState(false);
 const lastMousePosition = useRef({ x: 0, y: 0 });
+//refs
+const rotationStartRef = useRef({ x: 0, y: 0, rotation: 0 });
+const isRotatingRef = useRef(false);
 const canvasRef = useRef(null);
 // Handle canvas drag start
 const handleCanvasDragStart = (e) => {
@@ -604,7 +608,11 @@ const updateElementPosition = (id, x, y, type) => {
                         <FontAwesomeIcon icon="layer-group" className="h-4 w-4 transform scale-y-[-1]" />
                       </button>
                     </div>
+                    
                   )}
+                  {selectedElement?.id === text.id && selectedElement?.type === 'text' && (
+                      <MinitextMenu  />
+                    )}
                 </div>
               </DraggableWrapper>
             ))}
