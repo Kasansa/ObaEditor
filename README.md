@@ -52,7 +52,7 @@ The **ObaEditor App** is a React-based interactive tool that allows users to upl
 
 1. Clone the repository:
    ```bash
-   git clone [https://github.com/Kasansa/ObaEditor.git]
+   git clone https://github.com/Kasansa/ObaEditor.git
    cd image-text-editor
    ```
 
